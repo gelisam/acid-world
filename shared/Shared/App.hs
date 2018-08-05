@@ -21,7 +21,6 @@ import qualified  System.FilePath as FilePath
 import Acid.World
 import Acid.Core.CacheState
 
-import qualified Database.PostgreSQL.Simple as PSQL
 import Shared.Schema
 import Data.Char(toLower)
 
@@ -155,36 +154,6 @@ type UseGzip = Bool
 openAppAcidWorldFreshFS :: (ValidAppAcidSerialise s AcidWorldBackendFS, AcidSerialiseEvent s, AcidSerialiseConstraintAll s AppSegments AppEvents, ValidSegmentsSerialise s AppSegments) => (AcidSerialiseEventOptions s) -> UseGzip -> IO (AppAW s)
 openAppAcidWorldFreshFS opts useGzip = do
   openAppAcidWorldFresh (\td -> AWBConfigFS td useGzip) opts
-
-
-openAcidWorldPostgresWithInvariants :: String -> Invariants AppSegments -> IO (AppAW AcidSerialiserPostgresql)
-openAcidWorldPostgresWithInvariants testNameOrig invars = do
-  let testName = map toLower testNameOrig
-  let setupConf = PSQL.defaultConnectInfo {
-              PSQL.connectUser = "acid_world_test",
-              PSQL.connectPassword = "acid_world_test",
-              PSQL.connectDatabase = "postgres"
-              }
-  conn <- PSQL.connect setupConf
-  let testDbName = "acid_world_test_" ++ testName
-      createQ = mconcat ["CREATE DATABASE ", fromString testDbName,  " WITH OWNER = acid_world_test  ENCODING = 'UTF8'  TABLESPACE = pg_default  LC_COLLATE = 'en_GB.UTF-8'  LC_CTYPE = 'en_GB.UTF-8'  CONNECTION LIMIT = -1;" ]
-  _ <- PSQL.execute_ conn $ mconcat ["DROP DATABASE IF EXISTS ", fromString testDbName , ";"]
-
-  _ <- PSQL.execute_ conn createQ
-  _ <- PSQL.execute_ conn $ mconcat ["GRANT CONNECT, TEMPORARY ON DATABASE ", fromString testDbName, " TO public;"]
-  _ <- PSQL.execute_ conn $ mconcat ["GRANT ALL ON DATABASE ", fromString testDbName, "  TO acid_world_test;"]
-  PSQL.close conn
-  let conf = setupConf {PSQL.connectDatabase = testDbName}
-  conn2 <- PSQL.connect conf
-  _ <- PSQL.execute_ conn2 storableEventCreateTable
-  _ <- PSQL.execute_ conn2 $ createTable (Proxy :: Proxy UserIxSet)
-  _ <- PSQL.execute_ conn2 $ createTable (Proxy :: Proxy AddressIxSet)
-  _ <- PSQL.execute_ conn2 $ createTable (Proxy :: Proxy PhonenumberIxSet)
-
-  PSQL.close conn2
-
-
-  throwEither $ openAcidWorld defaultSegmentsState invars (AWBConfigPostgresql conf) AWConfigPureState AcidSerialiserPostgresqlOptions
 
 
 

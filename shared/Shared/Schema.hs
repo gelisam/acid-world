@@ -23,10 +23,6 @@ import Codec.Serialise
 import Data.SafeCopy
 import Acid.Core.CacheState
 
-import qualified Database.PostgreSQL.Simple.ToRow as PSQL
-import qualified Database.PostgreSQL.Simple.ToField as PSQL
-import qualified Database.PostgreSQL.Simple.FromField as PSQL
-
 instance (Serialise b, IxSet.Indexable a b) => Serialise (IxSet.IxSet a b) where
   encode = encode . IxSet.toList
   decode = fmap IxSet.fromList $ decode
@@ -47,22 +43,6 @@ data User = User  {
   userCreated :: !(Maybe Time.UTCTime),
   userDisabled :: !Bool
 } deriving (Eq, Show, Generic, Ord)
-
-instance PSQL.ToField [Text] where
-  toField = PSQL.toField . Aeson.toJSON
-
-instance PSQL.FromField [Text] where
-  fromField f bs = do
-   v <- PSQL.fromField f bs
-   case Aeson.parseEither Aeson.parseJSON v of
-    Left err -> PSQL.conversionError $ AWExceptionEventDeserialisationError (T.pack err)
-    Right ts -> pure ts
-
-instance PSQL.ToRow User
-instance (IxSet.Indexable a User) => AcidSerialisePostgres (IxSet.IxSet a User) where
-  toPostgresRows a = map PostgresRow (IxSet.toList a)
-  createTable _ = mconcat ["CREATE TABLE ", fromString (tableName (Proxy :: Proxy "Users")) ," (userId integer NOT NULL, userFirstName Text NOT NULL, userLastName Text NOT NULL, userComments json NOT NULL, userOtherInformation Text NOT NULL, userCreated timestamptz, userDisabled bool);"]
-  fromPostgresConduitT ts = fmap IxSet.fromList $ sequence $ map fromFields ts
 
 
 instance FromFields User where
@@ -165,7 +145,6 @@ data Address = Address  {
   addressCountry :: !Text
 } deriving (Eq, Show, Generic, Ord)
 
-instance PSQL.ToRow Address
 instance (IxSet.Indexable a Address) =>  AcidSerialisePostgres (IxSet.IxSet a Address) where
   toPostgresRows a = map PostgresRow (IxSet.toList a)
   createTable _ = mconcat ["CREATE TABLE ", fromString (tableName (Proxy :: Proxy "Addresses")) ," (addressId integer NOT NULL, addressFirst Text NOT NULL, addressCountry Text NOT NULL);"]
@@ -241,7 +220,6 @@ data Phonenumber = Phonenumber  {
   phonenumberIsCell :: !Bool
 } deriving (Eq, Show, Generic, Ord)
 
-instance PSQL.ToRow Phonenumber
 instance (IxSet.Indexable a Phonenumber) => AcidSerialisePostgres (IxSet.IxSet a Phonenumber) where
   toPostgresRows a = map PostgresRow (IxSet.toList a)
   createTable _ = mconcat ["CREATE TABLE ", fromString (tableName (Proxy :: Proxy "Phonenumbers")) ," (phonenumberId integer NOT NULL, phonenumberNumber Text NOT NULL, phonenumberCallingCode integer NOT NULL,  phonenumberIsCell bool);"]
